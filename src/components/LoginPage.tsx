@@ -13,17 +13,19 @@ import {
   Image,
   StyleSheet,
 } from "react-native";
-import { AntDesign, FontAwesome, Ionicons } from "@expo/vector-icons";
+import { AntDesign, Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../hooks/useAuth";
+import { useRouter } from "expo-router";
 
 interface LoginPageProps {
-  logo: any; // required
+  logo: any;
   title?: string;
   backgroundColor?: string;
   titleColor?: string;
   cardShadowColor?: string;
   primaryColor?: string;
   onGoToSignup?: () => void;
+  redirectTo?: string;
 }
 
 export default function LoginPage({
@@ -34,6 +36,7 @@ export default function LoginPage({
   cardShadowColor = "#000",
   primaryColor = "#22C55E",
   onGoToSignup,
+  redirectTo = "/home",
 }: LoginPageProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -43,12 +46,58 @@ export default function LoginPage({
   const [touched, setTouched] = useState({ email: false, password: false });
 
   const { signIn } = useAuth();
+  const router = useRouter();
   const validateEmail = (email: string) => /^[^\s@]+@gmail\.com$/.test(email);
+
+  const handleEmailChange = (text: string) => {
+    setEmail(text);
+    if (touched.email) {
+      if (!text.trim()) {
+        setErrors(prev => ({ ...prev, email: "Email is required" }));
+      } else if (!validateEmail(text.trim())) {
+        setErrors(prev => ({ ...prev, email: "Enter a valid @gmail.com email" }));
+      } else {
+        setErrors(prev => ({ ...prev, email: "" }));
+      }
+    }
+  };
+
+  const handlePasswordChange = (text: string) => {
+    setPassword(text);
+    if (touched.password) {
+      if (!text) {
+        setErrors(prev => ({ ...prev, password: "Password is required" }));
+      } else {
+        setErrors(prev => ({ ...prev, password: "" }));
+      }
+    }
+  };
+
+  const handleEmailBlur = () => {
+    setTouched(prev => ({ ...prev, email: true }));
+    if (!email.trim()) {
+      setErrors(prev => ({ ...prev, email: "Email is required" }));
+    } else if (!validateEmail(email.trim())) {
+      setErrors(prev => ({ ...prev, email: "Enter a valid @gmail.com email" }));
+    } else {
+      setErrors(prev => ({ ...prev, email: "" }));
+    }
+  };
+
+  const handlePasswordBlur = () => {
+    setTouched(prev => ({ ...prev, password: true }));
+    if (!password) {
+      setErrors(prev => ({ ...prev, password: "Password is required" }));
+    } else {
+      setErrors(prev => ({ ...prev, password: "" }));
+    }
+  };
 
   const handleSignIn = async () => {
     if (isLoading) return;
     let hasErrors = false;
     const newErrors = { email: "", password: "", general: "" };
+
     if (!email.trim()) {
       newErrors.email = "Email is required";
       hasErrors = true;
@@ -56,23 +105,28 @@ export default function LoginPage({
       newErrors.email = "Enter a valid @gmail.com email";
       hasErrors = true;
     }
+
     if (!password) {
       newErrors.password = "Password is required";
       hasErrors = true;
     }
+
     if (hasErrors) {
       setErrors(newErrors);
       setTouched({ email: true, password: true });
       return;
     }
+
     setIsLoading(true);
     try {
       const result = await signIn(email.trim(), password);
-      if (!result.success) {
-        setErrors((prev) => ({ ...prev, general: result.message || "Sign in failed." }));
+      if (result.success) {
+        router.push(redirectTo);
+      } else {
+        setErrors(prev => ({ ...prev, general: result.message || "Sign in failed." }));
       }
     } catch {
-      setErrors((prev) => ({ ...prev, general: "Unexpected error occurred." }));
+      setErrors(prev => ({ ...prev, general: "Unexpected error occurred." }));
     } finally {
       setIsLoading(false);
     }
@@ -90,27 +144,32 @@ export default function LoginPage({
 
             <View style={[styles.card, { shadowColor: cardShadowColor }]}>
               {errors.general ? <Text style={styles.errorText}>{errors.general}</Text> : null}
+
               {/* Email input */}
               <View style={styles.inputBox}>
                 <Text style={styles.label}>Email</Text>
-                <View style={styles.inputWrapper}>
+                <View style={[styles.inputWrapper, errors.email ? styles.inputError : null]}>
                   <Ionicons name="mail-outline" size={20} color="#9CA3AF" style={styles.iconLeft} />
                   <TextInput
                     style={styles.input}
                     placeholder="e.g. yourname@gmail.com"
                     placeholderTextColor="#9CA3AF"
                     value={email}
-                    onChangeText={setEmail}
+                    onChangeText={handleEmailChange}
+                    onBlur={handleEmailBlur}
                     keyboardType="email-address"
                     autoCapitalize="none"
+                    autoComplete="off"
                     editable={!isLoading}
                   />
                 </View>
+                {errors.email ? <Text style={styles.helperText}>{errors.email}</Text> : null}
               </View>
+
               {/* Password input */}
               <View style={styles.inputBox}>
                 <Text style={styles.label}>Password</Text>
-                <View style={styles.inputWrapper}>
+                <View style={[styles.inputWrapper, errors.password ? styles.inputError : null]}>
                   <Ionicons name="lock-closed-outline" size={20} color="#9CA3AF" style={styles.iconLeft} />
                   <TextInput
                     style={styles.input}
@@ -118,15 +177,19 @@ export default function LoginPage({
                     placeholderTextColor="#9CA3AF"
                     secureTextEntry={!showPassword}
                     value={password}
-                    onChangeText={setPassword}
+                    onChangeText={handlePasswordChange}
+                    onBlur={handlePasswordBlur}
                     autoCapitalize="none"
+                    autoComplete="off"
                     editable={!isLoading}
                   />
                   <TouchableOpacity onPress={() => setShowPassword(!showPassword)} disabled={isLoading}>
                     <Ionicons name={showPassword ? "eye-outline" : "eye-off-outline"} size={20} color="#9CA3AF" style={styles.iconRight} />
                   </TouchableOpacity>
                 </View>
+                {errors.password ? <Text style={styles.helperText}>{errors.password}</Text> : null}
               </View>
+
               <TouchableOpacity
                 style={[styles.signInButton, isFormValid && !isLoading ? { backgroundColor: primaryColor } : styles.signInDisabled]}
                 onPress={handleSignIn}
@@ -136,12 +199,13 @@ export default function LoginPage({
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.orText}>or continue with</Text>
-            <View style={styles.socialRow}>
-              <TouchableOpacity style={styles.socialButton}><AntDesign name="google" size={22} color="#EA4335" /></TouchableOpacity>
-              <TouchableOpacity style={styles.socialButton}><FontAwesome name="facebook" size={22} color="#1877F2" /></TouchableOpacity>
-              <TouchableOpacity style={styles.socialButton}><FontAwesome name="github" size={22} color="black" /></TouchableOpacity>
-            </View>
+            <Text style={styles.orText}>or</Text>
+
+            {/* Google Sign In Button */}
+            <TouchableOpacity style={styles.googleButton}>
+              <AntDesign name="google" size={20} color="#EA4335" />
+              <Text style={styles.googleButtonText}>Continue with Google</Text>
+            </TouchableOpacity>
 
             <View style={styles.signupRow}>
               <Text style={styles.signupText}>Don't have an account? </Text>
@@ -159,52 +223,83 @@ export default function LoginPage({
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   container: { flex: 1 },
-  scroll: { flexGrow: 1, justifyContent: "center", paddingHorizontal: 24 },
+  scroll: { flexGrow: 1, justifyContent: "flex-start", paddingHorizontal: 24, paddingTop: 20 },
   inner: { width: "100%" },
-  logo: { width: 100, height: 120, alignSelf: "center", marginBottom: 16 },
-  titleOutside: { fontSize: 18, fontWeight: "400", marginBottom: 16, textAlign: "center" },
+  logo: { width: 80, height: 80, alignSelf: "center", marginBottom: 12 },
+  titleOutside: { fontSize: 20, fontWeight: "600", marginBottom: 16, textAlign: "center", letterSpacing: 0.3 },
   card: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 16,
+    borderRadius: 24,
     padding: 20,
     width: "100%",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
-    marginBottom: 24,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 8,
+    marginBottom: 16,
   },
-  errorText: { color: "#DC2626", textAlign: "center", marginBottom: 12 },
+  errorText: { color: "#DC2626", textAlign: "center", marginBottom: 8 },
   inputBox: { marginBottom: 16 },
-  label: { color: "#4B5563", fontSize: 14, marginBottom: 4 },
+  label: { color: "#374151", fontSize: 14, marginBottom: 6, fontWeight: "500" },
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#F8FAFC",
     borderRadius: 12,
     paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
   },
-  input: { flex: 1, height: 48, fontSize: 16, color: "#111827" },
-  iconLeft: { marginRight: 8 },
-  iconRight: { marginLeft: 8 },
-  signInButton: { borderRadius: 12, paddingVertical: 14, alignItems: "center", marginBottom: 8, width: "100%" },
-  signInDisabled: { backgroundColor: "#D1D5DB" },
-  signInText: { color: "white", fontSize: 16, fontWeight: "600" },
-  orText: { textAlign: "center", color: "#6B7280", marginBottom: 16 },
-  socialRow: { flexDirection: "row", justifyContent: "center", marginBottom: 24 },
-  socialButton: {
-    backgroundColor: "#F9FAFB",
+  inputError: {
+    borderColor: "#EF4444",
+    backgroundColor: "#FEF2F2",
+  },
+  input: { flex: 1, height: 48, fontSize: 15, color: "#1F2937", fontWeight: "400" },
+  iconLeft: { marginRight: 10 },
+  iconRight: { marginLeft: 10 },
+  helperText: {
+    color: "#EF4444",
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 6,
+    fontWeight: "500",
+  },
+  signInButton: {
     borderRadius: 12,
-    padding: 12,
-    width: 56,
-    height: 56,
+    paddingVertical: 14,
+    alignItems: "center",
+    marginBottom: 8,
+    width: "100%",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  signInDisabled: { backgroundColor: "#D1D5DB" },
+  signInText: { color: "white", fontSize: 15, fontWeight: "700", letterSpacing: 0.5 },
+  orText: { textAlign: "center", color: "#6B7280", marginBottom: 16, fontSize: 14, fontWeight: "500" },
+  googleButton: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginHorizontal: 6,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  signupRow: { flexDirection: "row", justifyContent: "center", marginBottom: 16 },
-  signupText: { color: "#6B7280" },
-  signupLink: { fontWeight: "600" },
+  googleButtonText: {
+    color: "#374151",
+    fontSize: 15,
+    fontWeight: "600",
+    marginLeft: 10,
+  },
+  signupRow: { flexDirection: "row", justifyContent: "center", marginBottom: 12 },
+  signupText: { color: "#6B7280", fontSize: 14 },
+  signupLink: { fontWeight: "700", fontSize: 14 },
 });

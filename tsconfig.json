@@ -1,17 +1,26 @@
 {
   "compilerOptions": {
-    "target": "ES6",                        // Good for React Native, widely supported
-    "module": "ESNext",                     // For tree‑shaking; consumers can use CommonJS/ESM
-    "declaration": true,                    // Generates .d.ts files
-    "declarationDir": "./dist",             // Puts .d.ts in dist
-    "outDir": "./dist",                     // Compiled JS output
-    "jsx": "react-jsx",                     // Modern JSX transform (React 17+)
-    "moduleResolution": "Node",             // Standard resolution
-    "strict": true,                         // Strict typing
-    "esModuleInterop": true,                 // For clean imports
-    "skipLibCheck": true,                    // Faster builds
-    "forceConsistentCasingInFileNames": true // Prevent case issues across OS
+    "target": "ES6",
+    "module": "NodeNext",
+    "declaration": true,
+    "declarationDir": "./dist",
+    "outDir": "./dist",
+    "jsx": "react-jsx",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/**/*", "index.ts"], // Include all source files and index.ts
-  "exclude": ["node_modules", "dist", "build", "coverage"] // Ex
+  "include": [
+    "src/**/*",
+    "index.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    "coverage"
+  ],
+  "extends": "expo/tsconfig.base"
 }
