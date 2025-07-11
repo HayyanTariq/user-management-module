@@ -1,7 +1,9 @@
 "use client";
 import React, { useState } from "react";
-import { SignupPage } from "./SignupPage";
+
 import LoginPage from "./LoginPage";
+import { SignupPage } from "./SignupPage";
+
 
 interface AuthSystemProps {
   logo: any;
@@ -11,6 +13,7 @@ interface AuthSystemProps {
   titleColor?: string;
   cardShadowColor?: string;
   redirectTo?: string;
+  onNavigateToHome?: () => void;
 }
 
 export default function AuthSystem({
@@ -21,6 +24,7 @@ export default function AuthSystem({
   titleColor = "#111827",
   cardShadowColor = "#000",
   redirectTo = "/home",
+  onNavigateToHome,
 }: AuthSystemProps) {
   const [mode, setMode] = useState<"login" | "signup">("login");
 
@@ -34,6 +38,7 @@ export default function AuthSystem({
       cardShadowColor={cardShadowColor}
       redirectTo={redirectTo}
       onGoToSignup={() => setMode("signup")}
+      onNavigateToHome={onNavigateToHome}
     />
   ) : (
     <SignupPage
@@ -44,6 +49,7 @@ export default function AuthSystem({
       cardShadowColor={cardShadowColor}
       redirectTo={redirectTo}
       onGoToLogin={() => setMode("login")}
+      onNavigateToHome={onNavigateToHome}
     />
   );
 }

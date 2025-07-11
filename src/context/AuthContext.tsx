@@ -1,171 +1,124 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AuthContextType, User } from './AuthTypes';
+// context/AuthProvider.tsx
+import React, { createContext, useState, useEffect, ReactNode } from 'react';
+import { AuthContextType, User, AuthConfig, AuthResponse } from './AuthTypes';
+import { AuthApiClient } from '../services/AuthApiClient';
+import { TokenManager } from '../services/TokenManager';
 
-
-
-// Create Context
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Storage keys
-const STORAGE_KEYS = {
-  USER_DATA: '@user_data',
-  USERS_DB: '@users_database',
-} as const;
-
-// Auth Provider Component
-export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{ children: ReactNode; config: AuthConfig }> = ({ 
+  children, 
+  config 
+}) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [apiClient] = useState(() => new AuthApiClient(config));
 
-  // Initialize auth state on app start
   useEffect(() => {
+    TokenManager.setStorageKeys(
+      config.tokenStorageKey || '@auth_token',
+      config.refreshTokenStorageKey || '@auth_refresh_token'
+    );
+    
     initializeAuth();
-  }, []);
+  }, [config]);
 
   const initializeAuth = async () => {
     try {
-      const userData = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
-      if (userData) {
-        const parsedUser = JSON.parse(userData);
-        setUser(parsedUser);
+      const storedUser = await TokenManager.getUser();
+      const hasToken = await TokenManager.hasValidToken();
+
+      if (storedUser && hasToken) {
+        // Verify token is still valid
+        const currentUser = await apiClient.getCurrentUser();
+        if (currentUser) {
+          setUser(currentUser);
+          config.onAuthStateChange?.(currentUser);
+        } else {
+          await TokenManager.clearTokens();
+          config.onAuthStateChange?.(null);
+        }
+      } else {
+        await TokenManager.clearTokens();
+        config.onAuthStateChange?.(null);
       }
     } catch (error) {
-      console.error('Error initializing auth:', error);
+      console.error('Auth initialization error:', error);
+      await TokenManager.clearTokens();
+      config.onAuthStateChange?.(null);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Get all users from storage (simulating a database)
-  const getUsersDatabase = async (): Promise<User[]> => {
+  const signUp = async (name: string, email: string, password: string) => {
     try {
-      const usersData = await AsyncStorage.getItem(STORAGE_KEYS.USERS_DB);
-      return usersData ? JSON.parse(usersData) : [];
-    } catch (error) {
-      console.error('Error getting users database:', error);
-      return [];
-    }
-  };
-
-  // Save users database
-  const saveUsersDatabase = async (users: User[]) => {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEYS.USERS_DB, JSON.stringify(users));
-    } catch (error) {
-      console.error('Error saving users database:', error);
-    }
-  };
-
-  // Sign Up Function
-  const signUp = async (name: string, email: string, password: string): Promise<{ success: boolean; message: string }> => {
-    try {
-      // Input validation 
-      if (!name.trim() || !email.trim() || !password.trim()) {
-        return { success: false, message: 'All fields are required' };
-      }
-
-      if (password.length < 6) {
-        return { success: false, message: 'Password must be at least 6 characters' };
-      }
-
-      // Email validation
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        return { success: false, message: 'Please enter a valid email address' };
-      }
-
-      // Check if user already exists
-      const users = await getUsersDatabase();
-      const existingUser = users.find(u => u.email.toLowerCase() === email.toLowerCase() );
+      const result = await apiClient.signup({ name, email, password });
       
-      if (existingUser) {
-        return { success: false, message: 'An account with this email already exists' };
+      if (result.success && result.user) {
+        setUser(result.user);
+        config.onAuthStateChange?.(result.user);
+        return { success: true, message: result.message };
       }
-
-      // Create new user
-      const newUser: User = {
-        id: Date.now().toString(),
-        name: name.trim(),
-        email: email.toLowerCase().trim(),
-        password: password.trim(), // In a real app, hash the password before saving
-        createdAt: new Date().toISOString(),
-      };
-
-      // Save user to database
-      const updatedUsers = [...users, newUser];
-      await saveUsersDatabase(updatedUsers);
-
-      // Set current user
-      await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(newUser));
-      setUser(newUser);
-
-      return { success: true, message: 'Account created successfully!' };
+      
+      return { success: false, message: result.message };
     } catch (error) {
-      console.error('Sign up error:', error);
-      return { success: false, message: 'An error occurred during sign up. Please try again.' };
+      console.error('Signup error:', error);
+      return { success: false, message: 'An unexpected error occurred' };
     }
   };
 
-  // Sign In Function
-  const signIn = async (email: string, password: string): Promise<{ success: boolean; message: string }> => {
+  const signIn = async (email: string, password: string) => {
     try {
-      // Input validation
-      if (!email.trim() || !password.trim()) {
-        return { success: false, message: 'Email and password are required' };
+      const result = await apiClient.login({ email, password });
+      
+      if (result.success && result.user) {
+        setUser(result.user);
+        config.onAuthStateChange?.(result.user);
+        return { success: true, message: result.message };
       }
-
-      // Find user in database
-      const users = await getUsersDatabase();
-      const foundUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-
-      if (!foundUser) {
-        return { success: false, message: 'No account found with this email. Please sign up first.' };
-      }
-        if (foundUser.password !== password) {
-            return { success: false, message: 'Incorrect password. Please try again.' };
-        }
-
-
-      // In a real app, you would verify the password hash here
-      // For this demo, we'll simulate successful login if user exists
-      // Note: In production, store hashed passwords and verify them properly
-
-      // Set current user
-      await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(foundUser));
-      setUser(foundUser);
-
-      return { success: true, message: 'Welcome back!' };
+      
+      return { success: false, message: result.message };
     } catch (error) {
-      console.error('Sign in error:', error);
-      return { success: false, message: 'An error occurred during sign in. Please try again.' };
+      console.error('Login error:', error);
+      return { success: false, message: 'An unexpected error occurred' };
     }
   };
 
-  // Sign Out Function
   const signOut = async () => {
     try {
-      await AsyncStorage.removeItem(STORAGE_KEYS.USER_DATA);
+      await apiClient.logout();
       setUser(null);
+      await TokenManager.clearTokens();
+      config.onAuthStateChange?.(null);
     } catch (error) {
-      console.error('Sign out error:', error);
+      console.error('Logout error:', error);
     }
   };
 
-  // Delete Account Function
+  const signInWithGoogle = async (idToken: string) => {
+  
+    try {
+      const result = await apiClient.googleSignIn(idToken);
+      if (result.success && result.user) {
+        setUser(result.user);
+        config.onAuthStateChange?.(result.user);
+        return { success: true, message: result.message };
+      }
+      return { success: false, message: result.message };
+    } catch (error) {
+      console.error('Google Sign-In error:', error);
+      return { success: false, message: 'Google Sign-In failed' };
+    }
+  };
+
   const deleteAccount = async () => {
     try {
-      if (!user) return;
-
-      // Remove user from database
-      const users = await getUsersDatabase();
-      const updatedUsers = users.filter(u => u.id !== user.id);
-      await saveUsersDatabase(updatedUsers);
-
-      // Sign out
+      await apiClient.deleteAccount();
       await signOut();
     } catch (error) {
       console.error('Delete account error:', error);
+      throw error;
     }
   };
 
@@ -176,6 +129,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     signUp,
     signIn,
     signOut,
+    signInWithGoogle,
     deleteAccount,
   };
 
@@ -185,5 +139,3 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     </AuthContext.Provider>
   );
 };
-
-// Custom hook to use auth context
