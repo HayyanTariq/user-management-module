@@ -87,7 +87,6 @@ public
 .tern-port
 
 # VS Code settings
-.vscode/
 
 # Mac system files
 .DS_Store
@@ -116,3 +115,5 @@ storybook-static/
 
 # Test output
 test-output/
+temp_auto_push.bat
+temp_interactive_push.bat
