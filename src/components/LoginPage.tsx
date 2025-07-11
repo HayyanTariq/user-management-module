@@ -1,5 +1,6 @@
+// LoginPage.tsx
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -15,7 +16,7 @@ import {
 } from "react-native";
 import { AntDesign, Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../hooks/useAuth";
-import { useRouter } from "expo-router";
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
 
 interface LoginPageProps {
   logo: any;
@@ -26,6 +27,7 @@ interface LoginPageProps {
   primaryColor?: string;
   onGoToSignup?: () => void;
   redirectTo?: string;
+  onNavigateToHome?: () => void;
 }
 
 export default function LoginPage({
@@ -37,6 +39,7 @@ export default function LoginPage({
   primaryColor = "#22C55E",
   onGoToSignup,
   redirectTo = "/home",
+  onNavigateToHome,
 }: LoginPageProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -45,19 +48,27 @@ export default function LoginPage({
   const [errors, setErrors] = useState({ email: "", password: "", general: "" });
   const [touched, setTouched] = useState({ email: false, password: false });
 
-  const { signIn } = useAuth();
-  const router = useRouter();
-  const validateEmail = (email: string) => /^[^\s@]+@gmail\.com$/.test(email);
+  const { signIn, signInWithGoogle } = useAuth();
+
+  // Configure Google Sign-In
+  useEffect(() => {
+    GoogleSignin.configure({
+      webClientId: "YOUR_WEB_CLIENT_ID", // Replace with your Google Web Client ID
+      offlineAccess: true,
+    });
+  }, []);
+
+  const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   const handleEmailChange = (text: string) => {
     setEmail(text);
     if (touched.email) {
       if (!text.trim()) {
-        setErrors(prev => ({ ...prev, email: "Email is required" }));
+        setErrors((prev) => ({ ...prev, email: "Email is required" }));
       } else if (!validateEmail(text.trim())) {
-        setErrors(prev => ({ ...prev, email: "Enter a valid @gmail.com email" }));
+        setErrors((prev) => ({ ...prev, email: "Enter a valid email address" }));
       } else {
-        setErrors(prev => ({ ...prev, email: "" }));
+        setErrors((prev) => ({ ...prev, email: "" }));
       }
     }
   };
@@ -66,30 +77,50 @@ export default function LoginPage({
     setPassword(text);
     if (touched.password) {
       if (!text) {
-        setErrors(prev => ({ ...prev, password: "Password is required" }));
+        setErrors((prev) => ({ ...prev, password: "Password is required" }));
       } else {
-        setErrors(prev => ({ ...prev, password: "" }));
+        setErrors((prev) => ({ ...prev, password: "" }));
       }
     }
   };
 
   const handleEmailBlur = () => {
-    setTouched(prev => ({ ...prev, email: true }));
+    setTouched((prev) => ({ ...prev, email: true }));
     if (!email.trim()) {
-      setErrors(prev => ({ ...prev, email: "Email is required" }));
+      setErrors((prev) => ({ ...prev, email: "Email is required" }));
     } else if (!validateEmail(email.trim())) {
-      setErrors(prev => ({ ...prev, email: "Enter a valid @gmail.com email" }));
+      setErrors((prev) => ({ ...prev, email: "Enter a valid email address" }));
     } else {
-      setErrors(prev => ({ ...prev, email: "" }));
+      setErrors((prev) => ({ ...prev, email: "" }));
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    try {
+      await GoogleSignin.hasPlayServices();
+      const userInfo = await GoogleSignin.signIn();
+      setIsLoading(true);
+      const result = await signInWithGoogle(userInfo.idToken!);
+      if (result.success) {
+        console.log("Google Sign-In successful, calling onNavigateToHome");
+        onNavigateToHome?.();
+      } else {
+        setErrors((prev) => ({ ...prev, general: result.message || "Google Sign-In failed" }));
+      }
+    } catch (error) {
+      console.error("Google Sign-In error:", error);
+      setErrors((prev) => ({ ...prev, general: "Google Sign-In error" }));
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handlePasswordBlur = () => {
-    setTouched(prev => ({ ...prev, password: true }));
+    setTouched((prev) => ({ ...prev, password: true }));
     if (!password) {
-      setErrors(prev => ({ ...prev, password: "Password is required" }));
+      setErrors((prev) => ({ ...prev, password: "Password is required" }));
     } else {
-      setErrors(prev => ({ ...prev, password: "" }));
+      setErrors((prev) => ({ ...prev, password: "" }));
     }
   };
 
@@ -102,7 +133,7 @@ export default function LoginPage({
       newErrors.email = "Email is required";
       hasErrors = true;
     } else if (!validateEmail(email.trim())) {
-      newErrors.email = "Enter a valid @gmail.com email";
+      newErrors.email = "Enter a valid email address";
       hasErrors = true;
     }
 
@@ -121,12 +152,18 @@ export default function LoginPage({
     try {
       const result = await signIn(email.trim(), password);
       if (result.success) {
-        router.push(redirectTo);
+        console.log("Sign-In successful, calling onNavigateToHome");
+        if (onNavigateToHome) {
+          onNavigateToHome();
+        } else {
+          console.log("No onNavigateToHome provided, redirect to:", redirectTo);
+        }
       } else {
-        setErrors(prev => ({ ...prev, general: result.message || "Sign in failed." }));
+        setErrors((prev) => ({ ...prev, general: result.message || "Sign in failed." }));
       }
-    } catch {
-      setErrors(prev => ({ ...prev, general: "Unexpected error occurred." }));
+    } catch (error) {
+      console.error("Login error:", error);
+      setErrors((prev) => ({ ...prev, general: "Unexpected error occurred." }));
     } finally {
       setIsLoading(false);
     }
@@ -152,7 +189,7 @@ export default function LoginPage({
                   <Ionicons name="mail-outline" size={20} color="#9CA3AF" style={styles.iconLeft} />
                   <TextInput
                     style={styles.input}
-                    placeholder="e.g. yourname@gmail.com"
+                    placeholder="e.g. yourname@example.com"
                     placeholderTextColor="#9CA3AF"
                     value={email}
                     onChangeText={handleEmailChange}
@@ -184,10 +221,15 @@ export default function LoginPage({
                     editable={!isLoading}
                   />
                   <TouchableOpacity onPress={() => setShowPassword(!showPassword)} disabled={isLoading}>
-                    <Ionicons name={showPassword ? "eye-outline" : "eye-off-outline"} size={20} color="#9CA3AF" style={styles.iconRight} />
+                    <Ionicons
+                      name={showPassword ? "eye-outline" : "eye-off-outline"}
+                      size={20}
+                      color="#9CA3AF"
+                      style={styles.iconRight}
+                    />
                   </TouchableOpacity>
                 </View>
-                {errors.password ? <Text style={styles.helperText}>{errors.password}</Text> : null}
+                {errors.email ? <Text style={styles.helperText}>{errors.email}</Text> : null}
               </View>
 
               <TouchableOpacity
@@ -201,8 +243,8 @@ export default function LoginPage({
 
             <Text style={styles.orText}>or</Text>
 
-            {/* Google Sign In Button */}
-            <TouchableOpacity style={styles.googleButton}>
+            {/* Google Sign-In Button */}
+            <TouchableOpacity style={styles.googleButton} onPress={handleGoogleSignIn}>
               <AntDesign name="google" size={20} color="#EA4335" />
               <Text style={styles.googleButtonText}>Continue with Google</Text>
             </TouchableOpacity>

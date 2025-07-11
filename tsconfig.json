@@ -21,6 +21,5 @@
     "dist",
     "build",
     "coverage"
-  ],
-  "extends": "expo/tsconfig.base"
+  ]
 }
